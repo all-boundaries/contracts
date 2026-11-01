@@ -1,0 +1,16 @@
+[env]
+# Colima; remove or override if Docker Desktop provides /var/run/docker.sock
+DOCKER_HOST = "unix://{{env.HOME}}/.config/colima/default/docker.sock"
+PACT_BROKER_BASE_URL = "http://localhost:9292"
+
+[tasks.up]
+description = "Start the local Pact Broker on http://localhost:9292"
+run = "docker compose up -d --wait"
+
+[tasks.down]
+description = "Stop the broker, keeping its data"
+run = "docker compose down"
+
+[tasks.reset]
+description = "Stop the broker and delete its data"
+run = "docker compose down --volumes"
