@@ -9,6 +9,7 @@ import { brokerUrl, pactBroker } from "./lib/broker";
 import { isUnverified } from "./lib/pact-queries";
 import { contractChangeLines, formatTagMessage } from "./lib/changelog";
 import { readLocalPacts, selectPublishable } from "./lib/pacts";
+import { pipelineConfig } from "./lib/service-config";
 import { capture, CommandFailed, run } from "./lib/shell";
 import { servicesRoot, teamServices } from "./lib/team-services";
 import { currentBranch, mainBranch, nextRelease, pactVersion, pactVersionOf, releaseAtHead, formatSemver } from "./lib/version";
@@ -23,6 +24,7 @@ const has = (name: string) => argv.includes(name);
 
 const repo = process.cwd();
 const service: string = (await Bun.file(join(repo, "package.json")).json()).name;
+const { pacticipants, pactDirs } = await pipelineConfig(repo);
 const role = (option("--role") ?? "both") as Role;
 const actsAsConsumer = role === "consumer" || role === "both";
 const actsAsProvider = role === "provider" || role === "both";
@@ -36,13 +38,15 @@ function environmentOption(): string {
 }
 
 async function localPacts() {
-  return selectPublishable(service, teamServices, await readLocalPacts(join(repo, "pacts")));
+  return selectPublishable(pacticipants, teamServices, await readLocalPacts(repo, pactDirs));
 }
 
 async function test() {
   heading("test");
   // The consumer tests merge into an existing pact file, so interactions of deleted tests would linger.
-  rmSync(join(repo, "pacts"), { recursive: true, force: true });
+  for (const dir of pactDirs) {
+    for (const match of new Bun.Glob(dir).scanSync({ cwd: repo, onlyFiles: false })) rmSync(join(repo, match), { recursive: true, force: true });
+  }
   // The provider verification tests only run when the broker is named, and they belong to the verify step.
   await run(["mise", "run", "test"], { cwd: repo, env: { PACT_BROKER_BASE_URL: undefined } });
 }
@@ -62,8 +66,11 @@ async function tag() {
   if (has("--push")) capture(["git", "push", process.env.GIT_REMOTE ?? "origin", name], { cwd: repo });
 }
 
-const registerVersion = () =>
-  pactBroker(["create-or-update-version", "--pacticipant", service, "--version", pactVersion(repo), "--branch", currentBranch(repo)]);
+const registerVersion = async () => {
+  for (const pacticipant of pacticipants) {
+    await pactBroker(["create-or-update-version", "--pacticipant", pacticipant, "--version", pactVersion(repo), "--branch", currentBranch(repo)]);
+  }
+};
 
 async function publish() {
   if (!actsAsConsumer) return;
@@ -109,10 +116,10 @@ async function verifyProviders() {
   const version = pactVersion(repo);
   for (const { pact } of publishable) {
     const provider = pact.provider.name;
-    if (!(await isUnverified(provider, service, version))) continue;
+    if (!(await isUnverified(provider, pact.consumer.name, version))) continue;
     heading(`local webhook: ${provider} verifies the changed pact`);
     try {
-      await verify({ PACT_TRIGGER_CONSUMER: service, PACT_TRIGGER_BRANCH: currentBranch(repo) }, join(servicesRoot, provider));
+      await verify({ PACT_TRIGGER_CONSUMER: pact.consumer.name, PACT_TRIGGER_BRANCH: currentBranch(repo) }, join(servicesRoot, provider));
     } catch (error) {
       if (!(error instanceof CommandFailed)) throw error;
       console.log(`${provider} could not verify the pact; the result is in the broker and can-i-deploy will report it`);
@@ -123,16 +130,18 @@ async function verifyProviders() {
 async function canIDeploy(environment: string) {
   heading(`can-i-deploy to ${environment}`);
   const retry = Number(process.env.CAN_I_DEPLOY_RETRY_WHILE_UNKNOWN ?? 0);
-  await pactBroker([
-    "can-i-deploy",
-    "--pacticipant",
-    service,
-    "--version",
-    pactVersion(repo),
-    "--to-environment",
-    environment,
-    ...(retry > 0 ? ["--retry-while-unknown", String(retry), "--retry-interval", process.env.CAN_I_DEPLOY_RETRY_INTERVAL ?? "10"] : []),
-  ]);
+  for (const pacticipant of pacticipants) {
+    await pactBroker([
+      "can-i-deploy",
+      "--pacticipant",
+      pacticipant,
+      "--version",
+      pactVersion(repo),
+      "--to-environment",
+      environment,
+      ...(retry > 0 ? ["--retry-while-unknown", String(retry), "--retry-interval", process.env.CAN_I_DEPLOY_RETRY_INTERVAL ?? "10"] : []),
+    ]);
+  }
 }
 
 async function deploy(environment: string) {
@@ -142,7 +151,9 @@ async function deploy(environment: string) {
 
 async function recordDeployment(environment: string) {
   heading(`record the ${environment} deployment`);
-  await pactBroker(["record-deployment", "--pacticipant", service, "--version", pactVersion(repo), "--environment", environment]);
+  for (const pacticipant of pacticipants) {
+    await pactBroker(["record-deployment", "--pacticipant", pacticipant, "--version", pactVersion(repo), "--environment", environment]);
+  }
 }
 
 async function release(environment: string) {

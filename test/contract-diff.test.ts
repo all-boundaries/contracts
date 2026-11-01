@@ -90,6 +90,16 @@ describe("selectPublishable", () => {
     expect(skipped[0]?.reason).toContain("processor is not a team service");
   });
 
+  it("keeps the pacts of every pacticipant a repository releases, such as a monorepo with one per feature", () => {
+    const { publishable, skipped } = selectPublishable(["channel-payments", "channel-subscriptions"], team, [
+      local("channel-payments", "payments"),
+      local("channel-subscriptions", "subscriptions"),
+      local("channel-payments", "processor"),
+    ]);
+    expect(publishable.map(({ pact }) => pact.consumer.name)).toEqual(["channel-payments", "channel-subscriptions"]);
+    expect(skipped).toHaveLength(1);
+  });
+
   it("does not publish another service's pact", () => {
     expect(selectPublishable("payments", team, [local("subscriptions", "payments")]).publishable).toEqual([]);
   });
