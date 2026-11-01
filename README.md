@@ -151,3 +151,43 @@ service released at the tag it has and recorded as deployed in both environments
 
 The scripts have their own tests: `mise run test` (version and bump logic against temporary git repositories, and the
 contract diff).
+
+## Running the real workflow with act
+
+`act` runs the real workflows in Docker on this machine. The `act` shim is installed through mise but has no version
+selected, so run it as `mise x act@0.2.92 -- act`. In a service repository:
+
+```sh
+mise x act@0.2.92 -- act push -W .github/workflows/ci.yml \
+  --pull=false -P ubuntu-latest=catthehacker/ubuntu:act-latest \
+  --container-daemon-socket /var/run/docker.sock \
+  --container-options "--network host" \
+  --local-repository all-boundaries/contracts@main=$PWD/../contracts \
+  --secret PACT_BROKER_BASE_URL=http://localhost:9292 --secret PACT_BROKER_TOKEN=local
+```
+
+Tried on `subscriptions` at its tagged `main`: the `build`, `staging` and `production` jobs all passed against the
+local broker (about 10 minutes in total, 2.5 of each job in `bun install`).
+
+What makes it work:
+
+- `--local-repository` answers the references to `all-boundaries/contracts@main` (the reusable workflow and the `setup`
+  action) from the local checkout, so no remote is needed.
+- `--container-daemon-socket /var/run/docker.sock` is the socket inside the Colima VM. The macOS path of the Colima
+  socket (`~/.config/colima/default/docker.sock`) is not usable from a container.
+- `--network host` is the VM's network, where the broker's published port 9292 is `localhost`. The broker returns links
+  to `http://localhost:9292`, so the containers have to see it there. The workflow sets `DOCKER_HOST` to the mounted
+  socket, which Testcontainers uses.
+- The `setup` action turns the mise cache off under `act` (`ACT=true`), which has no cache service to restore from.
+
+What does not work or is not covered:
+
+- Nothing is cached between jobs: every job installs the dependencies again (about 2.5 minutes).
+- `act` does not know GitHub environments: the `production` job runs straight after `staging` without waiting for a
+  reviewer.
+- The `verify-changed-pact` job (a `repository_dispatch` from a broker webhook) was not run; the broker has no webhooks
+  locally, and `act repository_dispatch` needs an event file with the `client_payload`.
+- On a `main` that is already tagged the `tag` step finds the release and does nothing, so pushing a new tag (`--push`,
+  which needs a remote) was not exercised. On an untagged `main` it would fail without an `origin`.
+- Running it records the deployment of the checked-out version again (harmless when it is the version already
+  recorded); the simulated deployment markers are written inside the container, not to `.deployments/`.
