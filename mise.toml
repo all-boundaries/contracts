@@ -18,8 +18,9 @@ run = "bun test"
 run = "bun run check"
 
 [tasks.up]
-description = "Start the local Pact Broker on http://localhost:9292"
-run = "docker compose up -d --wait"
+description = "Start the local Pact Broker on http://localhost:9292 with the staging and production environments and nothing else"
+depends = ["setup"]
+run = ["docker compose up -d --wait", "bun scripts/broker-setup.ts"]
 
 [tasks.down]
 description = "Stop the broker, keeping its data"

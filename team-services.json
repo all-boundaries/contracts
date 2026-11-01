@@ -1,0 +1,4 @@
+{
+  "services": ["accounts", "inventory", "payments", "subscriptions"],
+  "providers": ["accounts", "inventory", "payments"]
+}
