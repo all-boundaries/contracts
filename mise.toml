@@ -27,5 +27,13 @@ description = "Stop the broker, keeping its data"
 run = "docker compose down"
 
 [tasks.reset]
-description = "Stop the broker and delete its data"
-run = "docker compose down --volumes"
+description = "Stop the broker and delete its data and the simulated deployments"
+run = ["docker compose down --volumes", "rm -rf .deployments"]
+
+[tasks.simulate]
+description = "Push to main in every service, providers first: ci:main for each (add -- --promote to go on to production)"
+run = "bun scripts/simulate.ts"
+
+[tasks."simulate:fresh"]
+description = "Start from an empty broker and release every service through staging and production"
+run = ["mise run reset", "mise run up", "bun scripts/simulate.ts --promote"]
