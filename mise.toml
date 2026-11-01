@@ -37,3 +37,7 @@ run = "bun scripts/simulate.ts"
 [tasks."simulate:fresh"]
 description = "Start from an empty broker and release every service through staging and production"
 run = ["mise run reset", "mise run up", "bun scripts/simulate.ts --promote"]
+
+[tasks."webhooks:create"]
+description = "Create the Pact Broker webhooks that start each provider's verification on GitHub (needs GITHUB_DISPATCH_TOKEN)"
+run = "bun scripts/webhooks.ts"
