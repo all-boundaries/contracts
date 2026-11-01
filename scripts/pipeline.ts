@@ -62,12 +62,20 @@ async function tag() {
   if (has("--push")) capture(["git", "push", process.env.GIT_REMOTE ?? "origin", name], { cwd: repo });
 }
 
+const registerVersion = () =>
+  pactBroker(["create-or-update-version", "--pacticipant", service, "--version", pactVersion(repo), "--branch", currentBranch(repo)]);
+
 async function publish() {
   if (!actsAsConsumer) return;
   heading("publish pacts");
   const { publishable, skipped } = await localPacts();
   for (const { file, reason } of skipped) console.log(`not publishing ${file}: ${reason}`);
-  if (publishable.length === 0) return console.log("no pacts to publish");
+  if (publishable.length === 0) {
+    // can-i-deploy only knows versions the broker has seen, and a consumer with no pacts yet (the channel before its
+    // adapters exist) would otherwise be unknown to it.
+    console.log("no pacts to publish; registering the version");
+    return registerVersion();
+  }
   await pactBroker([
     "publish",
     ...publishable.map((p) => p.file),
@@ -89,7 +97,7 @@ async function verifyOwnProvider() {
   if (!actsAsProvider) return;
   heading("verify the pacts consumers published");
   // A provider that publishes no pact is unknown to the broker until a version of it is registered.
-  await pactBroker(["create-or-update-version", "--pacticipant", service, "--version", pactVersion(repo), "--branch", currentBranch(repo)]);
+  await registerVersion();
   await verify();
 }
 
