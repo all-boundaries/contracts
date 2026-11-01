@@ -1,0 +1,85 @@
+# The pipeline of every team service; a service calls it from its own .github/workflows/ci.yml.
+# Every step is a script in scripts/pipeline.ts, so `mise run ci` and `mise run ci:main` run the same code locally.
+#
+# Needs these secrets, passed on with `secrets: inherit`: PACT_BROKER_BASE_URL and PACT_BROKER_TOKEN.
+# Needs a "staging" and a "production" environment in each calling repository's settings; add required reviewers to
+# "production", which is what holds the production job until someone approves it.
+name: service-pipeline
+
+on:
+  workflow_call:
+    inputs:
+      role:
+        description: consumer (publishes pacts), provider (verifies them) or both
+        type: string
+        required: true
+    secrets:
+      PACT_BROKER_BASE_URL:
+        required: true
+      PACT_BROKER_TOKEN:
+        required: true
+
+env:
+  DOCKER_HOST: unix:///var/run/docker.sock # the services' mise.toml defaults to Colima for laptops
+  PACT_BROKER_BASE_URL: ${{ secrets.PACT_BROKER_BASE_URL }}
+  PACT_BROKER_TOKEN: ${{ secrets.PACT_BROKER_TOKEN }}
+
+# One main build at a time per repository, or two releases could pick the same tag.
+concurrency:
+  group: pipeline-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  # A branch push, and the first part of a push to main.
+  build:
+    if: github.event_name != 'repository_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # pushes the release tag
+    steps:
+      - uses: all-boundaries/contracts/.github/actions/setup@main
+      - run: bun "$CONTRACTS_DIR/scripts/pipeline.ts" test
+      - name: Tag the release
+        if: github.ref == 'refs/heads/main'
+        run: bun "$CONTRACTS_DIR/scripts/pipeline.ts" tag --push
+      - run: bun "$CONTRACTS_DIR/scripts/pipeline.ts" publish --role ${{ inputs.role }}
+      - run: bun "$CONTRACTS_DIR/scripts/pipeline.ts" verify --role ${{ inputs.role }}
+
+  # The Pact Broker webhook (contract_content_changed) sends a repository_dispatch to the provider.
+  verify-changed-pact:
+    if: github.event_name == 'repository_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: all-boundaries/contracts/.github/actions/setup@main
+      - run: bun "$CONTRACTS_DIR/scripts/pipeline.ts" verify --role ${{ inputs.role }}
+        env:
+          PACT_TRIGGER_CONSUMER: ${{ github.event.client_payload.consumer }}
+          PACT_TRIGGER_BRANCH: ${{ github.event.client_payload.consumer_branch }}
+
+  staging:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      # A consumer's new pact is verified by its providers' own pipelines; wait for that result.
+      CAN_I_DEPLOY_RETRY_WHILE_UNKNOWN: 30
+      CAN_I_DEPLOY_RETRY_INTERVAL: 10
+    steps:
+      - uses: all-boundaries/contracts/.github/actions/setup@main
+      - run: bun "$CONTRACTS_DIR/scripts/pipeline.ts" can-i-deploy --to staging
+      - run: bun "$CONTRACTS_DIR/scripts/pipeline.ts" deploy --to staging
+      - run: bun "$CONTRACTS_DIR/scripts/pipeline.ts" record-deployment --to staging
+
+  production:
+    needs: staging
+    runs-on: ubuntu-latest
+    environment: production # required reviewers on this environment are the approval
+    env:
+      CAN_I_DEPLOY_RETRY_WHILE_UNKNOWN: 30
+      CAN_I_DEPLOY_RETRY_INTERVAL: 10
+    steps:
+      - uses: all-boundaries/contracts/.github/actions/setup@main
+      - run: bun "$CONTRACTS_DIR/scripts/pipeline.ts" can-i-deploy --to production
+      - run: bun "$CONTRACTS_DIR/scripts/pipeline.ts" deploy --to production
+      - run: bun "$CONTRACTS_DIR/scripts/pipeline.ts" record-deployment --to production

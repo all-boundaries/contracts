@@ -1,0 +1,22 @@
+name: Set up a service pipeline job
+description: Check out the service with its tags, install its tools and the scripts of this repository, and name the release author.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0 # the version is derived from tags and commit history
+    - uses: jdx/mise-action@v5
+    - name: Install dependencies
+      shell: bash
+      run: |
+        bun install --frozen-lockfile
+        # This action's repository is on the runner next to the action: that is where the pipeline scripts are.
+        echo "CONTRACTS_DIR=$(cd "${{ github.action_path }}/../../.." && pwd)" >> "$GITHUB_ENV"
+        (cd "${{ github.action_path }}/../../.." && bun install --frozen-lockfile)
+    - name: Name the release author
+      shell: bash
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
