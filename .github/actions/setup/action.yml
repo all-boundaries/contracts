@@ -8,6 +8,8 @@ runs:
       with:
         fetch-depth: 0 # the version is derived from tags and commit history
     - uses: jdx/mise-action@v5
+      with:
+        cache: ${{ env.ACT != 'true' }} # act has no cache service to restore from and waits for it
     - name: Install dependencies
       shell: bash
       run: |
