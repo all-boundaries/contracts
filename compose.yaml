@@ -1,4 +1,5 @@
 # Local Pact Broker for development. Not a production deployment.
+# The broker image is pinned; bump it on purpose (newest stable tag: https://hub.docker.com/r/pactfoundation/pact-broker/tags).
 services:
   database:
     image: postgres:17-alpine
@@ -15,7 +16,7 @@ services:
       retries: 20
 
   broker:
-    image: pactfoundation/pact-broker:latest
+    image: pactfoundation/pact-broker:3.0.0-pactbroker2.121.2
     depends_on:
       database:
         condition: service_healthy
