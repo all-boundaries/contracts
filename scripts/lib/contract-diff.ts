@@ -9,7 +9,7 @@ export type Pact = {
 export type ContractChange = { kind: "added" | "removed" | "changed"; interaction: string; detail?: string };
 
 // Fields that differ between runs without the contract meaning anything different.
-const ignored = new Set(["key", "pending", "comments"]);
+const ignored = new Set(["key", "_id", "pending", "comments"]);
 
 function stable(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;

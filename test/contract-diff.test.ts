@@ -24,6 +24,12 @@ describe("diffPacts", () => {
     expect(diffPacts(before, after)).toEqual([]);
   });
 
+  it("ignores the _id that Pact V4 generates anew in every run", () => {
+    const before = pact("subscriptions", "payments", [{ ...charge({ chargeId: "ch-1" }), _id: "aaa" }]);
+    const after = pact("subscriptions", "payments", [{ ...charge({ chargeId: "ch-1" }), _id: "bbb" }]);
+    expect(diffPacts(before, after)).toEqual([]);
+  });
+
   it("sees an added interaction, and all of them when there was no earlier pact", () => {
     const after = pact("subscriptions", "payments", [charge({ chargeId: "ch-1" })]);
     expect(diffPacts(pact("subscriptions", "payments", []), after)).toEqual([
