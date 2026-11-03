@@ -93,7 +93,7 @@ The workflow is thin and the logic is in the scripts, so one set of code runs in
 | | GitHub | Locally |
 | --- | --- | --- |
 | Pipeline | `.github/workflows/service-pipeline.yml`, called by each service's `.github/workflows/ci.yml` | `mise run ci` (branch build) and `mise run ci:main` (push to main) in the service |
-| Broker | shared (https://allb-pact-broker.onrender.com, basic auth), from the secrets `PACT_BROKER_USERNAME` and `PACT_BROKER_PASSWORD`; `PACT_BROKER_BASE_URL` overrides the URL and `PACT_BROKER_TOKEN` can replace the password | `http://localhost:9292` |
+| Broker | shared (https://allb-pact-broker.onrender.com, basic auth), from the secrets `PACT_BROKER_USERNAME` and `PACT_BROKER_PASSWORD`; the URL is set in the workflow | `http://localhost:9292` |
 | A changed pact reaches its provider | broker webhook `contract_content_changed`, which sends a `repository_dispatch` to the provider repository; its workflow runs `verify` | `verify-providers` in the consumer's `branch` and `main` sequences runs the provider's `contracts:verify` |
 | Production approval | required reviewers of the `production` environment | `-- --promote` |
 | Deployment | simulated for now | simulated, marker files in `.deployments/` |
