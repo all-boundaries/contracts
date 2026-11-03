@@ -1,7 +1,9 @@
 # The pipeline of every team service; a service calls it from its own .github/workflows/ci.yml.
 # Every step is a script in scripts/pipeline.ts, so `mise run ci` and `mise run ci:main` run the same code locally.
 #
-# Needs these secrets, passed on with `secrets: inherit`: PACT_BROKER_BASE_URL and PACT_BROKER_TOKEN.
+# Needs these secrets, passed on with `secrets: inherit`: PACT_BROKER_USERNAME and PACT_BROKER_PASSWORD (the shared broker
+# uses basic auth). PACT_BROKER_BASE_URL is optional and defaults to the shared broker; PACT_BROKER_TOKEN is an optional
+# alternative to the username and password.
 # Needs a "staging" and a "production" environment in each calling repository's settings; add required reviewers to
 # "production", which is what holds the production job until someone approves it.
 name: service-pipeline
@@ -15,13 +17,19 @@ on:
         required: true
     secrets:
       PACT_BROKER_BASE_URL:
-        required: true
+        required: false
+      PACT_BROKER_USERNAME:
+        required: false
+      PACT_BROKER_PASSWORD:
+        required: false
       PACT_BROKER_TOKEN:
-        required: true
+        required: false
 
 env:
   DOCKER_HOST: unix:///var/run/docker.sock # the services' mise.toml defaults to Colima for laptops
-  PACT_BROKER_BASE_URL: ${{ secrets.PACT_BROKER_BASE_URL }}
+  PACT_BROKER_BASE_URL: ${{ secrets.PACT_BROKER_BASE_URL || 'https://allb-pact-broker.onrender.com' }}
+  PACT_BROKER_USERNAME: ${{ secrets.PACT_BROKER_USERNAME }}
+  PACT_BROKER_PASSWORD: ${{ secrets.PACT_BROKER_PASSWORD }}
   PACT_BROKER_TOKEN: ${{ secrets.PACT_BROKER_TOKEN }}
 
 # One main build at a time per repository, or two releases could pick the same tag.

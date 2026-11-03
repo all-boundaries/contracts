@@ -22,6 +22,10 @@ description = "Start the local Pact Broker on http://localhost:9292 with the sta
 depends = ["setup"]
 run = ["docker compose up -d --wait", "bun scripts/broker-setup.ts"]
 
+[tasks."broker:setup"]
+description = "Make the broker named by PACT_BROKER_BASE_URL (with PACT_BROKER_USERNAME and PACT_BROKER_PASSWORD) ready: staging and production environments"
+run = "bun scripts/broker-setup.ts"
+
 [tasks.down]
 description = "Stop the broker, keeping its data"
 run = "docker compose down"

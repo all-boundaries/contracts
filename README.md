@@ -9,7 +9,7 @@ mise run down   # keeps the data
 mise run reset  # also deletes the data and the simulated deployments
 ```
 
-The broker is a local development one (image pinned in `compose.yaml`); a shared deployment is still to be decided.
+The pipelines on GitHub use the shared broker at https://allb-pact-broker.onrender.com; the one in `compose.yaml` (image pinned) is for local development.
 
 ## Why tags and not commit SHAs
 
@@ -93,7 +93,7 @@ The workflow is thin and the logic is in the scripts, so one set of code runs in
 | | GitHub | Locally |
 | --- | --- | --- |
 | Pipeline | `.github/workflows/service-pipeline.yml`, called by each service's `.github/workflows/ci.yml` | `mise run ci` (branch build) and `mise run ci:main` (push to main) in the service |
-| Broker | shared, from the secrets `PACT_BROKER_BASE_URL` and `PACT_BROKER_TOKEN` | `http://localhost:9292` |
+| Broker | shared (https://allb-pact-broker.onrender.com, basic auth), from the secrets `PACT_BROKER_USERNAME` and `PACT_BROKER_PASSWORD`; `PACT_BROKER_BASE_URL` overrides the URL and `PACT_BROKER_TOKEN` can replace the password | `http://localhost:9292` |
 | A changed pact reaches its provider | broker webhook `contract_content_changed`, which sends a `repository_dispatch` to the provider repository; its workflow runs `verify` | `verify-providers` in the consumer's `branch` and `main` sequences runs the provider's `contracts:verify` |
 | Production approval | required reviewers of the `production` environment | `-- --promote` |
 | Deployment | simulated for now | simulated, marker files in `.deployments/` |
@@ -163,7 +163,7 @@ mise x act@0.2.92 -- act push -W .github/workflows/ci.yml \
   --container-daemon-socket /var/run/docker.sock \
   --container-options "--network host" \
   --local-repository all-boundaries/contracts@main=$PWD/../contracts \
-  --secret PACT_BROKER_BASE_URL=http://localhost:9292 --secret PACT_BROKER_TOKEN=local
+  --secret PACT_BROKER_BASE_URL=http://localhost:9292
 ```
 
 Tried on `subscriptions` at its tagged `main`: the `build`, `staging` and `production` jobs all passed against the
