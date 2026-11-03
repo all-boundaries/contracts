@@ -68,6 +68,7 @@ async function tag() {
 
 const registerVersion = async () => {
   for (const pacticipant of pacticipants) {
+    await pactBroker(["create-or-update-pacticipant", "--name", pacticipant, "--main-branch", mainBranch]);
     await pactBroker(["create-or-update-version", "--pacticipant", pacticipant, "--version", pactVersion(repo), "--branch", currentBranch(repo)]);
   }
 };
